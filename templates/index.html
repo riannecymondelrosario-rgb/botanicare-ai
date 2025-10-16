@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BotaniCare - Plant Disease AI</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', sans-serif; }
+        body { background: #f9f9f9; color: #333; line-height: 1.6; padding: 16px; max-width: 800px; margin: 0 auto; }
+        header { text-align: center; margin-bottom: 24px; padding: 12px 0; }
+        h1 { color: #2e7d32; font-size: 2.0em; margin-bottom: 8px; }
+        .subtitle { color: #666; font-size: 1.1em; }
+        .upload-box { background: white; border: 2px dashed #4caf50; border-radius: 12px; padding: 24px; text-align: center; margin-bottom: 20px; }
+        .preview-container { text-align: center; margin-bottom: 20px; }
+        #image-preview { max-width: 100%; max-height: 300px; border: 1px solid #ddd; border-radius: 8px; margin: 10px auto; display: none; }
+        .btn { background: #2e7d32; color: white; border: none; padding: 12px 24px; font-size: 16px; border-radius: 8px; cursor: pointer; margin-top: 12px; }
+        .btn:hover { background: #1b5e20; }
+        .btn-analyze { background: #1976d2; margin-top: 15px; display: none; }
+        .btn-analyze:hover { background: #1565c0; }
+        .btn-secondary { background: #1976d2; margin-top: 15px; }
+        #file-input { display: none; }
+        #loading { display: none; text-align: center; padding: 20px; background: white; border-radius: 12px; margin: 20px 0; }
+        .spinner { border: 3px solid #f3f3f3; border-top: 3px solid #4caf50; border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite; margin: 0 auto 12px; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        #result { display: none; background: white; border-radius: 12px; padding: 20px; margin-top: 20px; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
+        .disease-header { margin-bottom: 16px; }
+        .disease-name { font-size: 1.5em; font-weight: bold; color: #1b5e20; }
+        .confidence { color: #555; font-size: 0.95em; margin-top: 4px; }
+        .section { margin: 16px 0; }
+        .section h3 { color: #2e7d32; margin-bottom: 8px; font-size: 1.1em; }
+        .section ul { padding-left: 20px; }
+        .section li { margin-bottom: 6px; }
+        .citation { font-size: 0.9em; color: #666; margin-top: 16px; padding-top: 12px; border-top: 1px solid #eee; }
+        footer { text-align: center; margin-top: 30px; font-size: 0.85em; color: #777; }
+        @media (max-width: 600px) {
+            h1 { font-size: 1.7em; }
+            .btn { width: 100%; }
+            #image-preview { max-height: 200px; }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>BotaniCare</h1>
+        <p class="subtitle">AI-Powered Plant Disease Detection for Filipino Farmers</p>
+    </header>
+
+    <div class="upload-box" id="upload-area">
+        <p>📸 Upload a clear photo of the affected leaf</p>
+        <input type="file" id="file-input" accept="image/*" />
+        <button class="btn" onclick="document.getElementById('file-input').click()">
+            Choose Image from File Manager
+        </button>
+        <p style="font-size: 0.85em; color: #666; margin-top: 10px;">
+            🔒 Your image is processed securely and not saved.
+        </p>
+    </div>
+
+    <div class="preview-container">
+        <img id="image-preview" src="" alt="Preview">
+        <button id="analyze-btn" class="btn btn-analyze">🔍 Analyze This Image</button>
+    </div>
+
+    <div id="loading">
+        <div class="spinner"></div>
+        <p>Analyzing your plant... (5–10 seconds)</p>
+    </div>
+
+    <div id="result">
+        <div class="disease-header">
+            <div class="disease-name" id="disease-name">Healthy</div>
+            <div class="confidence" id="confidence">Confidence: 95%</div>
+        </div>
+
+        <div class="section">
+            <h3>🔍 Key Symptoms Observed</h3>
+            <ul id="symptoms"></ul>
+        </div>
+
+        <div class="section">
+            <h3>⚠️ Impact Summary</h3>
+            <p id="impact">Plant is healthy.</p>
+        </div>
+
+        <div class="section">
+            <h3>✅ Management Recommendations</h3>
+            <ul id="management"></ul>
+        </div>
+
+        <div class="citation">
+            <strong>Reference:</strong>
+            <span id="citation">Philippine Rice Research Institute (PhilRice)</span>
+        </div>
+
+        <button class="btn btn-secondary" onclick="location.reload()">
+            🔁 Analyze Another Image
+        </button>
+    </div>
+
+    <footer>
+        <p>Data sources: PhilRice • IRRI • FAO • CABI</p>
+    </footer>
+
+    <script>
+        const fileInput = document.getElementById('file-input');
+        const imagePreview = document.getElementById('image-preview');
+        const analyzeBtn = document.getElementById('analyze-btn');
+        const uploadArea = document.getElementById('upload-area');
+        const loading = document.getElementById('loading');
+        const result = document.getElementById('result');
+
+        let selectedFile = null;
+
+        fileInput.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            selectedFile = file;
+            
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                imagePreview.src = event.target.result;
+                imagePreview.style.display = 'block';
+                analyzeBtn.style.display = 'inline-block';
+            };
+            reader.readAsDataURL(file);
+        });
+
+        analyzeBtn.addEventListener('click', function() {
+            if (!selectedFile) return;
+
+            const formData = new FormData();
+            formData.append('file', selectedFile);
+
+            uploadArea.style.display = 'none';
+            imagePreview.style.display = 'none';
+            analyzeBtn.style.display = 'none';
+            loading.style.display = 'block';
+
+            fetch('/predict', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    alert('Error: ' + data.error);
+                    location.reload();
+                    return;
+                }
+
+                document.getElementById('disease-name').textContent = data.disease_name;
+                document.getElementById('confidence').textContent = `Confidence: ${data.confidence_percent}%`;
+
+                const symptomsList = document.getElementById('symptoms');
+                symptomsList.innerHTML = '';
+                data.key_symptoms_observed.forEach(symptom => {
+                    const li = document.createElement('li');
+                    li.textContent = symptom;
+                    symptomsList.appendChild(li);
+                });
+
+                document.getElementById('impact').textContent = data.impact_summary;
+
+                const managementList = document.getElementById('management');
+                managementList.innerHTML = '';
+                data.management_recommendations.forEach(rec => {
+                    const li = document.createElement('li');
+                    li.textContent = rec;
+                    managementList.appendChild(li);
+                });
+
+                if (data.citations && data.citations.length > 0) {
+                    document.getElementById('citation').textContent = data.citations[0].source;
+                }
+
+                loading.style.display = 'none';
+                result.style.display = 'block';
+            })
+            .catch(err => {
+                alert('Analysis failed. Please try again.');
+                location.reload();
+            });
+        });
+    </script>
+</body>
+</html>
